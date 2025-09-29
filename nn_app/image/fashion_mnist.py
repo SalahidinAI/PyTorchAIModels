@@ -7,6 +7,7 @@ from PIL import Image
 from nn_app.db.database import SessionLocal
 from nn_app.db.models import Fashion
 from sqlalchemy.orm import Session
+from nn_app.config import device
 
 
 async def get_db():
@@ -51,7 +52,6 @@ transform = transforms.Compose([
 ])
 
 check_image_app = APIRouter(prefix='/fashion', tags=['Fashion'])
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = CheckImage()
 model.load_state_dict(torch.load('model_cnn_fashion_mnist.pth', map_location=device))
 model.to(device)

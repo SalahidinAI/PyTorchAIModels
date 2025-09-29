@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from nn_app.db.database import SessionLocal
 from nn_app.db.schema import TextSchema
 from nn_app.db.models import News
+from nn_app.config import device
 
 
 async def get_db():
@@ -37,7 +38,6 @@ class CheckNews(nn.Module):
         return x
 
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 vocab = torch.load('vocab_news.pth', weights_only=False)
 tokenizer = get_tokenizer('basic_english')
 

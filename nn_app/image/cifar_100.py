@@ -8,6 +8,7 @@ from PIL import Image
 from sqlalchemy.orm import Session
 from nn_app.db.database import SessionLocal
 from nn_app.db.models import Cifar100
+from nn_app.config import device
 
 
 async def get_db():
@@ -43,9 +44,6 @@ classes = {
 
 # FastAPI app
 check_image_app = APIRouter(prefix='/cifar_100', tags=['CIFAR 100'])
-
-# Устройство
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Загружаем ResNet18
 model_resnet = models.resnet18(weights=None)  # без весов, т.к. мы загрузим свои

@@ -8,6 +8,7 @@ import soundfile as sf
 from sqlalchemy.orm import Session
 from nn_app.db.database import SessionLocal
 from nn_app.db.models import SpeechCommands
+from nn_app.config import device
 
 
 async def get_db():
@@ -44,8 +45,6 @@ class CheckAudio(nn.Module):
         x = self.second(x)
         return x
 
-
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 labels = torch.load('labels_speech.pth')
 model = CheckAudio()

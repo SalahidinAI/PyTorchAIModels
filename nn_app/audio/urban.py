@@ -10,6 +10,7 @@ import soundfile as sf
 from sqlalchemy.orm import Session
 from nn_app.db.database import SessionLocal
 from nn_app.db.models import Urban
+from nn_app.config import device
 
 
 async def get_db():
@@ -57,7 +58,6 @@ class UrbanAudio(nn.Module):
         return x
 
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 sr = 22050
 transform = transforms.MelSpectrogram(
     sample_rate=sr,
