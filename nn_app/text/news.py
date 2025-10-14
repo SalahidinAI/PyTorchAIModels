@@ -11,6 +11,7 @@ from nn_app.db.database import SessionLocal
 from nn_app.db.schema import TextSchema
 from nn_app.db.models import News
 from nn_app.config import device
+import streamlit as st
 
 
 async def get_db():
@@ -55,25 +56,23 @@ text_news_app = APIRouter(prefix='/news', tags=['News'])
 translator = Translator()
 
 
-@text_news_app.post('/predict')
-async def predict(text: TextSchema, db: Session = Depends(get_db)):
-    translated = await translator.translate(text.text, dest='en')
-    translated_text = translated.text
+def news_text():
+    st.title('News Classifier')
+    st.text('Type a text and model will recognize it')
 
-    tensor = torch.tensor(text_pipeline(translated_text), dtype=torch.int64).unsqueeze(0).to(device)
+    text = st.text_input('Type')
 
-    with torch.no_grad():
-        pred = model(tensor)
-        label = torch.argmax(pred, dim=1).item()
-        prediction = classes[label]
+    if not text:
+        st.warning('No text typed')
+    else:
+        if st.button('Classify Text'):
+            translated = translator.translate(text, dest='en').text
+            translated_text = translated
 
-    news_db = News(
-        text=text.text,
-        label=prediction
-    )
+            tensor = torch.tensor(text_pipeline(translated_text), dtype=torch.int64).unsqueeze(0).to(device)
 
-    db.add(news_db)
-    db.commit()
-    db.refresh(news_db)
+            with torch.no_grad():
+                pred = model(tensor)
+                label = torch.argmax(pred, dim=1).item()
 
-    return {'Label': f'{prediction}'}
+            st.success(f'Label: {classes[label]}')

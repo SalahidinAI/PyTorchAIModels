@@ -8,6 +8,7 @@ from nn_app.db.database import SessionLocal
 from nn_app.db.models import Fashion
 from sqlalchemy.orm import Session
 from nn_app.config import device
+import streamlit as st
 
 
 async def get_db():
@@ -44,6 +45,7 @@ class CheckImage(nn.Module):
         x = self.fc(x)
         return x
 
+
 transform = transforms.Compose([
     transforms.Grayscale(num_output_channels=1),
     transforms.Resize((28, 28)),
@@ -70,31 +72,29 @@ classes = [
     'Ankle boot',
 ]
 
-@check_image_app.post('/predict/')
-async def check_image(image: UploadFile = File(...), db: Session = Depends(get_db)):
-    try:
-        image_data = await image.read()
-        if not image_data:
-            raise HTTPException(status_code=400, detail='No image is given')
-        img = Image.open(io.BytesIO(image_data))
-        img_tensor = transform(img).unsqueeze(0).to(device)
 
-        with torch.no_grad():
-            y_pred = model(img_tensor)
-            pred = y_pred.argmax(dim=1).item()
-            prediction = classes[pred]
+def fashion_image():
+    st.title('Fashion MNIST')
+    st.text('Upload image with a number, and model will recognize it')
 
-        fashion_db = Fashion(
-            image=str(image),
-            label=prediction
-        )
+    file = st.file_uploader('Choose of drop an image', type=['svg', 'png', 'jpg', 'jpeg'])
 
-        db.add(fashion_db)
-        db.commit()
-        db.refresh(fashion_db)
+    if not file:
+        st.warning('No file is uploaded')
+    else:
+        st.image(file, caption='Uploaded image')
+        if st.button('Recognize the image'):
+            try:
+                image_data = file.read()
 
-        return {'Prediction': prediction}
+                img = Image.open(io.BytesIO(image_data))
+                img_tensor = transform(img).unsqueeze(0).to(device)
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f'error: {e}')
+                with torch.no_grad():
+                    y_pred = model(img_tensor)
+                    pred = y_pred.argmax(dim=1).item()
 
+                st.success(f'Prediction: {classes[pred]}')
+
+            except Exception as e:
+                st.exception(f'Error: {e}')

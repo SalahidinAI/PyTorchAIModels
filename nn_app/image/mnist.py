@@ -1,14 +1,17 @@
-from fastapi import APIRouter, HTTPException, File, UploadFile, Depends
-import io
+import streamlit as st
 import torch
+import io
+from PIL import Image
 from torchvision import transforms
 import torch.nn as nn
-from PIL import Image
 from sqlalchemy.orm import Session
 from nn_app.db.database import SessionLocal
 from nn_app.db.models import Mnist
 from nn_app.config import device
+from fastapi import APIRouter, HTTPException, File, UploadFile, Depends
 
+# 🟩 NEW: импорт для рисования
+from streamlit_drawable_canvas import st_canvas
 
 async def get_db():
     db = SessionLocal()
@@ -52,29 +55,76 @@ model.to(device)
 model.eval()
 
 
-@check_image_app.post('/predict/')
-async def check_image(image: UploadFile = File(...), db: Session = Depends(get_db)):
-    try:
-        image_data = await image.read()
-        if not image_data:
-            raise HTTPException(status_code=400, detail='No image is given')
-        img = Image.open(io.BytesIO(image_data))
-        img_tensor = transform(img).unsqueeze(0).to(device)
+def mnist_image():
+    st.title('MNIST Classifier')
+    st.text('Upload or draw a digit, and the model will recognize it.')
 
-        with torch.no_grad():
-            y_pred = model(img_tensor)
-            pred = y_pred.argmax(dim=1).item()
+    # 🔹 Переключатель: загрузить или нарисовать
+    mode = st.radio("Choose input method:", ["Upload", "Draw"], horizontal=True)
 
-        mnist_db = Mnist(
-            image=str(image),
-            label=pred
+    if mode == "Upload":
+        # --- Блок загрузки изображения ---
+        file = st.file_uploader('Choose or drop an image', type=['svg', 'png', 'jpg', 'jpeg'])
+
+        if not file:
+            st.warning('No file is uploaded')
+        else:
+            st.image(file, caption='Uploaded image')
+            if st.button('Recognize the image'):
+                try:
+                    image_data = file.read()
+                    if not image_data:
+                        raise HTTPException(status_code=400, detail='No image is given')
+
+                    img = Image.open(io.BytesIO(image_data)).convert('L')  # grayscale
+                    img = img.resize((28, 28))  # гарантированный размер 28x28
+                    img_tensor = transform(img).unsqueeze(0).to(device)
+
+                    with torch.no_grad():
+                        y_pred = model(img_tensor)
+                        pred = y_pred.argmax(dim=1).item()
+
+                    st.success(f'Prediction: {pred}')
+
+                except Exception as e:
+                    st.exception(f'Error: {e}')
+
+    else:
+        # --- Блок рисования ---
+        st.write("Draw a digit below 👇")
+
+        canvas_result = st_canvas(
+            fill_color="black",
+            stroke_width=20,
+            stroke_color="white",
+            background_color="black",
+            width=280,
+            height=280,
+            drawing_mode="freedraw",
+            key="canvas"
         )
 
-        db.add(mnist_db)
-        db.commit()
-        db.refresh(mnist_db)
+        if canvas_result.image_data is not None:
+            # Преобразуем canvas → PIL.Image
+            img = Image.fromarray((canvas_result.image_data[:, :, 0] * 255).astype('uint8')).convert("L")
 
-        return {'Prediction': pred}
+            # 🟩 Инвертируем цвета (теперь фон черный, цифра белая)
+            img = Image.eval(img, lambda x: 255 - x)
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f'error: {e}')
+            # 🟩 Меняем размер до 28x28
+            img = img.resize((28, 28))
+
+            st.image(img, caption="Your drawing (28×28 resized)")
+
+            if st.button("Recognize the drawn digit"):
+                try:
+                    img_tensor = transform(img).unsqueeze(0).to(device)
+
+                    with torch.no_grad():
+                        y_pred = model(img_tensor)
+                        pred = y_pred.argmax(dim=1).item()
+
+                    st.success(f'Prediction: {pred}')
+
+                except Exception as e:
+                    st.exception(f'Error: {e}')

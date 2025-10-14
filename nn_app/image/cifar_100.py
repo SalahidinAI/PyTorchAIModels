@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from nn_app.db.database import SessionLocal
 from nn_app.db.models import Cifar100
 from nn_app.config import device
+import streamlit as st
 
 
 async def get_db():
@@ -19,7 +20,6 @@ async def get_db():
         db.close()
 
 
-# Твои классы (0-99!)
 classes = {
     0: 'apple', 1: 'aquarium_fish', 2: 'baby', 3: 'bear', 4: 'beaver', 5: 'bed',
     6: 'bee', 7: 'beetle', 8: 'bicycle', 9: 'bottle', 10: 'bowl', 11: 'boy',
@@ -42,50 +42,44 @@ classes = {
     94: 'wardrobe', 95: 'whale', 96: 'willow_tree', 97: 'wolf', 98: 'woman', 99: 'worm'
 }
 
-# FastAPI app
 check_image_app = APIRouter(prefix='/cifar_100', tags=['CIFAR 100'])
 
-# Загружаем ResNet18
-model_resnet = models.resnet18(weights=None)  # без весов, т.к. мы загрузим свои
-model_resnet.fc = nn.Linear(model_resnet.fc.in_features, 100)  # 100 классов
+model_resnet = models.resnet18(weights=None)
+model_resnet.fc = nn.Linear(model_resnet.fc.in_features, 100)
 model_resnet.load_state_dict(torch.load("model_cifar_100.pth", map_location=device))
 model_resnet = model_resnet.to(device)
 model_resnet.eval()
 
-# Трансформации (как при обучении на ImageNet)
 transform = transforms.Compose([
-    transforms.Resize((224, 224)),  # ResNet ждёт 224x224
+    transforms.Resize((224, 224)),
     transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406],  # ImageNet нормализация
+    transforms.Normalize(mean=[0.485, 0.456, 0.406],
                          std=[0.229, 0.224, 0.225]),
 ])
 
 
-@check_image_app.post("/predict/")
-async def check_image(image: UploadFile = File(...), db: Session = Depends(get_db)):
-    try:
-        image_data = await image.read()
-        if not image_data:
-            raise HTTPException(status_code=400, detail="No image is given")
+def cifar_100_image():
+    st.title('CIFAR-100')
+    st.text('Upload image with a number, and model will recognize it')
 
-        img = Image.open(io.BytesIO(image_data)).convert("RGB")  # ResNet ждёт RGB
-        img_tensor = transform(img).unsqueeze(0).to(device)
+    file = st.file_uploader('Choose of drop an image', type=['svg', 'png', 'jpg', 'jpeg'])
 
-        with torch.no_grad():
-            y_pred = model_resnet(img_tensor)
-            pred = y_pred.argmax(dim=1).item()
-            prediction = classes[pred]
+    if not file:
+        st.warning('No file is uploaded')
+    else:
+        st.image(file, caption='Uploaded image')
+        if st.button('Recognize the image'):
+            try:
+                image_data = file.read()
 
-        cifar100_db = Cifar100(
-            image=str(image),
-            label=prediction
-        )
+                img = Image.open(io.BytesIO(image_data)).convert("RGB")
+                img_tensor = transform(img).unsqueeze(0).to(device)
 
-        db.add(cifar100_db)
-        db.commit()
-        db.refresh(cifar100_db)
+                with torch.no_grad():
+                    y_pred = model_resnet(img_tensor)
+                    pred = y_pred.argmax(dim=1).item()
 
-        return {"Prediction": prediction}
+                st.success(f'Prediction: {classes[pred]}')
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"error: {e}")
+            except Exception as e:
+                st.exception(f"Error: {e}")

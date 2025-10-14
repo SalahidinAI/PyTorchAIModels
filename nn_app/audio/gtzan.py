@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from nn_app.db.database import SessionLocal
 from nn_app.db.models import Gtzan
 from nn_app.config import device
+import streamlit as st
 
 
 async def get_db():
@@ -82,32 +83,31 @@ def change_audio(waveform, sample_rate):
 music_genre_app = APIRouter(prefix='/gtzan', tags=['GTZAN'])
 
 
-@music_genre_app.post('/predict/')
-async def predict(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    try:
-        data = await file.read()
-        if not data:
-            raise HTTPException(status_code=400, detail='Empty file')
-        waveform, sample_rate = sf.read(io.BytesIO(data), dtype='float32')
-        waveform = torch.tensor(waveform).T
+def gtzan_audio():
+    st.title('GTZAN')
+    st.text('Upload audio (.wav) to recognize sound')
 
-        spec = change_audio(waveform, sample_rate).unsqueeze(0).to(device)
+    file = st.file_uploader('Upload a file', type=['wav'])
 
-        with torch.no_grad():
-            y_pred = model(spec)
-            pred_idx = torch.argmax(y_pred, dim=1).item()
-            predicted_class = genres[pred_idx]
+    if not file:
+        st.warning('Upload a file')
+    else:
+        st.audio(file)
+        if st.button('Recognize'):
+            try:
+                data = file.read()
 
-        gtzan_db = Gtzan(
-            audio=file.filename,
-            label=predicted_class
-        )
+                waveform, sample_rate = sf.read(io.BytesIO(data), dtype='float32')
+                waveform = torch.tensor(waveform).T
 
-        db.add(gtzan_db)
-        db.commit()
-        db.refresh(gtzan_db)
+                spec = change_audio(waveform, sample_rate).unsqueeze(0).to(device)
 
-        return {f'Index: {pred_idx}, Genre: {predicted_class}'}
+                with torch.no_grad():
+                    y_pred = model(spec)
+                    pred_idx = torch.argmax(y_pred, dim=1).item()
+                    predicted_class = genres[pred_idx]
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f'Error: {e}')
+                st.success(f'Index: {pred_idx}, Genre: {predicted_class}')
+
+            except Exception as e:
+                st.exception(f'Error: {e}')
