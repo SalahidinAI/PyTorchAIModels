@@ -98,13 +98,9 @@ urban_app = APIRouter(prefix='/urban', tags=['Urban sounds'])
 
 def urban_audio():
     st.title('Urban Sounds Classifier')
-    st.text('Upload audio (.wav) to recognize sound')
+    st.text(f'Upload audio (.wav) to recognize sound. Model can classify sounds of {labels}')
 
     file = st.file_uploader('Upload a file', type=['wav'])
-    # audio_value = st.audio_input("Record high quality audio", sample_rate=48000)
-
-    # if audio_value:
-    #     file = audio_value
 
     if not file:
         st.warning('Upload a file')

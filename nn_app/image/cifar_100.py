@@ -60,7 +60,7 @@ transform = transforms.Compose([
 
 def cifar_100_image():
     st.title('CIFAR-100')
-    st.text('Upload image with a number, and model will recognize it')
+    st.text('Upload image, and model will recognize it')
 
     file = st.file_uploader('Choose of drop an image', type=['svg', 'png', 'jpg', 'jpeg'])
 

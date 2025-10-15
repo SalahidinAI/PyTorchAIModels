@@ -84,39 +84,11 @@ check_audio = APIRouter(prefix='/speech', tags=['Speech Commands'])
 
 def speech_audio():
     st.title("🎧 Speech Commands Classifier")
-    st.write("Recognize spoken commands either by recording your voice or uploading an audio file (.wav).")
+    st.write(f"Recognize spoken commands either by recording your voice or uploading an audio file (.wav). Classes {labels}")
 
-    st.markdown("### 🎙 Record Audio")
-    with st.container():
-        st.info("Click the button below to record your voice.")
-        audio_bytes = audio_recorder(text="Start Recording", recording_color="#FF4B4B", neutral_color="#5B5B5B")
+    mode = st.radio('Choose input method:', ['Upload', 'Record'], horizontal=True)
 
-        if audio_bytes:
-            st.audio(audio_bytes, format="audio/wav")
-            if st.button("Recognize Recorded Audio"):
-                try:
-                    wf, sr = sf.read(io.BytesIO(audio_bytes), dtype='float32')
-
-                    if wf.ndim > 1:
-                        wf = torch.mean(torch.tensor(wf), dim=1)
-                    else:
-                        wf = torch.tensor(wf)
-
-                    spec = change_audio_format(wf, sr).unsqueeze(0).to(device)
-                    with torch.no_grad():
-                        y_pred = model(spec)
-                        pred_idx = torch.argmax(y_pred, dim=1).item()
-                        pred_class = labels[pred_idx]
-
-                    st.success(f"Predicted class: **{pred_class}**")
-
-                except Exception as e:
-                    st.error(f"Error while recognizing audio: {e}")
-
-    st.markdown("---")
-
-    st.markdown("### 📁 Upload Audio File")
-    with st.container():
+    if mode == 'Upload':
         file = st.file_uploader("Upload a WAV file", type=["wav"])
 
         if file:
@@ -144,4 +116,28 @@ def speech_audio():
         else:
             st.warning("Please upload an audio file to continue.")
 
+    else:
+        st.info("Click the button below to record your voice.")
+        audio_bytes = audio_recorder(text="Start Recording", recording_color="#FF4B4B", neutral_color="#5B5B5B")
 
+        if audio_bytes:
+            st.audio(audio_bytes, format="audio/wav")
+            if st.button("Recognize Recorded Audio"):
+                try:
+                    wf, sr = sf.read(io.BytesIO(audio_bytes), dtype='float32')
+
+                    if wf.ndim > 1:
+                        wf = torch.mean(torch.tensor(wf), dim=1)
+                    else:
+                        wf = torch.tensor(wf)
+
+                    spec = change_audio_format(wf, sr).unsqueeze(0).to(device)
+                    with torch.no_grad():
+                        y_pred = model(spec)
+                        pred_idx = torch.argmax(y_pred, dim=1).item()
+                        pred_class = labels[pred_idx]
+
+                    st.success(f"Predicted class: **{pred_class}**")
+
+                except Exception as e:
+                    st.error(f"Error while recognizing audio: {e}")

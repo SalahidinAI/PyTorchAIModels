@@ -58,7 +58,7 @@ translator = Translator()
 
 def news_text():
     st.title('News Classifier')
-    st.text('Type a text and model will recognize it')
+    st.text(f'Type a text and model will recognize it. Classes {vocab}')
 
     text = st.text_input('Type')
 

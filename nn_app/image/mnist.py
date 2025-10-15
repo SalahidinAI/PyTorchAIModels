@@ -9,9 +9,12 @@ from nn_app.db.database import SessionLocal
 from nn_app.db.models import Mnist
 from nn_app.config import device
 from fastapi import APIRouter, HTTPException, File, UploadFile, Depends
+from PIL import ImageOps
+import numpy as np
 
 # 🟩 NEW: импорт для рисования
 from streamlit_drawable_canvas import st_canvas
+
 
 async def get_db():
     db = SessionLocal()
@@ -57,7 +60,7 @@ model.eval()
 
 def mnist_image():
     st.title('MNIST Classifier')
-    st.text('Upload or draw a digit, and the model will recognize it.')
+    st.text('Upload or draw a digit from 0 to 9, and the model will recognize it.')
 
     # 🔹 Переключатель: загрузить или нарисовать
     mode = st.radio("Choose input method:", ["Upload", "Draw"], horizontal=True)
@@ -77,7 +80,6 @@ def mnist_image():
                         raise HTTPException(status_code=400, detail='No image is given')
 
                     img = Image.open(io.BytesIO(image_data)).convert('L')  # grayscale
-                    img = img.resize((28, 28))  # гарантированный размер 28x28
                     img_tensor = transform(img).unsqueeze(0).to(device)
 
                     with torch.no_grad():
@@ -90,7 +92,6 @@ def mnist_image():
                     st.exception(f'Error: {e}')
 
     else:
-        # --- Блок рисования ---
         st.write("Draw a digit below 👇")
 
         canvas_result = st_canvas(
@@ -105,20 +106,41 @@ def mnist_image():
         )
 
         if canvas_result.image_data is not None:
-            # Преобразуем canvas → PIL.Image
-            img = Image.fromarray((canvas_result.image_data[:, :, 0] * 255).astype('uint8')).convert("L")
-
-            # 🟩 Инвертируем цвета (теперь фон черный, цифра белая)
-            img = Image.eval(img, lambda x: 255 - x)
-
-            # 🟩 Меняем размер до 28x28
-            img = img.resize((28, 28))
-
-            st.image(img, caption="Your drawing (28×28 resized)")
-
             if st.button("Recognize the drawn digit"):
                 try:
-                    img_tensor = transform(img).unsqueeze(0).to(device)
+                    arr = canvas_result.image_data.copy()
+
+                    if arr.max() <= 1.0:
+                        arr = (arr * 255).astype("uint8")
+                    else:
+                        arr = arr.astype("uint8")
+
+                    if arr.shape[2] == 4:
+                        rgb = arr[:, :, :3].astype("float32")
+                        alpha = arr[:, :, 3].astype("float32") / 255.0
+                        rgb = (rgb * alpha[..., None])
+                        arr = np.clip(rgb, 0, 255).astype("uint8")
+
+                    img = Image.fromarray(arr).convert("L")
+
+                    # 🔹 исправлено здесь
+                    img = img.resize((28, 28), Image.Resampling.LANCZOS)
+
+                    arr_l = np.array(img)
+                    h, w = arr_l.shape
+                    border = np.concatenate([
+                        arr_l[:4, :].ravel(),
+                        arr_l[-4:, :].ravel(),
+                        arr_l[:, :4].ravel(),
+                        arr_l[:, -4:].ravel()
+                    ])
+                    if border.mean() > 127:
+                        img = ImageOps.invert(img)
+
+                    # st.image(img.resize((140, 140)), caption="Prepared image for model")
+
+                    to_tensor = transforms.ToTensor()
+                    img_tensor = to_tensor(img).unsqueeze(0).to(device)
 
                     with torch.no_grad():
                         y_pred = model(img_tensor)

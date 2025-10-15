@@ -10,6 +10,7 @@ from nn_app.db.database import SessionLocal
 from nn_app.db.models import Gtzan
 from nn_app.config import device
 import streamlit as st
+from audio_recorder_streamlit import audio_recorder
 
 
 async def get_db():
@@ -85,29 +86,59 @@ music_genre_app = APIRouter(prefix='/gtzan', tags=['GTZAN'])
 
 def gtzan_audio():
     st.title('GTZAN')
-    st.text('Upload audio (.wav) to recognize sound')
+    st.text(f'Upload of record music (.wav). Model can classify these genres {genres}.')
 
-    file = st.file_uploader('Upload a file', type=['wav'])
+    mode = st.radio('Choose input method:', ["Upload", "Record"], horizontal=True)
 
-    if not file:
-        st.warning('Upload a file')
+    if mode == 'Upload':
+        file = st.file_uploader('Upload a file', type=['wav'])
+
+        if not file:
+            st.warning('Upload a file')
+        else:
+            st.audio(file)
+            if st.button('Recognize'):
+                try:
+                    data = file.read()
+
+                    waveform, sample_rate = sf.read(io.BytesIO(data), dtype='float32')
+                    waveform = torch.tensor(waveform).T
+
+                    spec = change_audio(waveform, sample_rate).unsqueeze(0).to(device)
+
+                    with torch.no_grad():
+                        y_pred = model(spec)
+                        pred_idx = torch.argmax(y_pred, dim=1).item()
+                        predicted_class = genres[pred_idx]
+
+                    st.success(f'Index: {pred_idx}, Genre: {predicted_class}')
+
+                except Exception as e:
+                    st.exception(f'Error: {e}')
+
     else:
-        st.audio(file)
-        if st.button('Recognize'):
-            try:
-                data = file.read()
+        st.info("Click the button below to record your voice.")
+        audio_bytes = audio_recorder(text="Start Recording", recording_color="#FF4B4B", neutral_color="#5B5B5B")
 
-                waveform, sample_rate = sf.read(io.BytesIO(data), dtype='float32')
-                waveform = torch.tensor(waveform).T
+        if audio_bytes:
+            st.audio(audio_bytes, format="audio/wav")
+            if st.button("Recognize Recorded Audio"):
+                try:
+                    wf, sr = sf.read(io.BytesIO(audio_bytes), dtype='float32')
 
-                spec = change_audio(waveform, sample_rate).unsqueeze(0).to(device)
+                    if wf.ndim > 1:
+                        wf = torch.mean(torch.tensor(wf), dim=1)
+                    else:
+                        wf = torch.tensor(wf)
 
-                with torch.no_grad():
-                    y_pred = model(spec)
-                    pred_idx = torch.argmax(y_pred, dim=1).item()
-                    predicted_class = genres[pred_idx]
+                    spec = change_audio(wf, sr).unsqueeze(0).to(device)
+                    with torch.no_grad():
+                        y_pred = model(spec)
+                        pred_idx = torch.argmax(y_pred, dim=1).item()
+                        pred_class = genres[pred_idx]
 
-                st.success(f'Index: {pred_idx}, Genre: {predicted_class}')
+                    st.success(f"Predicted class: **{pred_class}**")
 
-            except Exception as e:
-                st.exception(f'Error: {e}')
+                except Exception as e:
+                    st.error(f"Error while recognizing audio: {e}")
+

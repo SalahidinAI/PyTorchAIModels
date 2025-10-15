@@ -9,6 +9,7 @@ from nn_app.db.models import Fashion
 from sqlalchemy.orm import Session
 from nn_app.config import device
 import streamlit as st
+from PIL import ImageOps
 
 
 async def get_db():
@@ -48,7 +49,9 @@ class CheckImage(nn.Module):
 
 transform = transforms.Compose([
     transforms.Grayscale(num_output_channels=1),
-    transforms.Resize((28, 28)),
+    # transforms.Resize((28, 28)),
+    transforms.Resize(28),
+    transforms.CenterCrop(28),
     transforms.ToTensor(),
     transforms.Normalize((0.5,), (0.5,)),
 ])
@@ -75,7 +78,7 @@ classes = [
 
 def fashion_image():
     st.title('Fashion MNIST')
-    st.text('Upload image with a number, and model will recognize it')
+    st.text('Upload image with clothes. Model can classify these objects T-shirt/top, Trouser, Pullover, Dress, Coat, Sandal, Shirt, Sneaker, Bag, Ankle boot.')
 
     file = st.file_uploader('Choose of drop an image', type=['svg', 'png', 'jpg', 'jpeg'])
 
@@ -87,9 +90,10 @@ def fashion_image():
             try:
                 image_data = file.read()
 
-                img = Image.open(io.BytesIO(image_data))
+                img = Image.open(io.BytesIO(image_data)).convert('L')
+                img = ImageOps.invert(img)
                 img_tensor = transform(img).unsqueeze(0).to(device)
-
+                print(img_tensor.shape)
                 with torch.no_grad():
                     y_pred = model(img_tensor)
                     pred = y_pred.argmax(dim=1).item()
